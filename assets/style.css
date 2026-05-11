@@ -63,3 +63,15 @@ canvas{
   .calendar-cell{min-height:86px;padding:7px;font-size:12px}
   .calendar-item{font-size:10px}
 }
+
+
+/* unified app icon */
+.brand-mark img,
+.brand-logo img{
+  width:72px;
+  height:72px;
+  object-fit:contain;
+  border-radius:18px;
+  background:#0b0b0b;
+  padding:4px;
+}
