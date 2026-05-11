@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b0b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="gene">
+  <title>gene 管理アプリ</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div id="toast" class="toast"></div>
+  <div class="shell">
+    <header class="app-header">
+      <div class="brand">
+        <div class="logo-mark">g</div>
+        <div>
+          <p class="brand-sub">private management app</p>
+          <h1>gene</h1>
+        </div>
+      </div>
+      <div class="header-actions">
+        <span id="syncStatus" class="sync-status">未同期</span>
+        <button id="syncBtn" class="btn ghost">同期</button>
+        <button id="backupBtn" class="btn ghost">バックアップ</button>
+        <label class="btn ghost file-btn">復元<input id="restoreInput" type="file" accept="application/json"></label>
+      </div>
+    </header>
+
+    <section id="setupPanel" class="setup-panel card">
+      <h2>初期設定</h2>
+      <p>Google Apps Script のWebアプリURLを設定すると、スマホ・PC間でデータ同期できます。未設定でも端末内保存で使えます。</p>
+      <div class="setup-grid">
+        <label>Apps Script WebアプリURL<input id="apiUrlInput" placeholder="https://script.google.com/macros/s/xxxxx/exec"></label>
+        <label>アクセスキー<input id="apiKeyInput" placeholder="自分だけの合言葉"></label>
+      </div>
+      <div class="row-actions">
+        <button id="saveSettingsBtn" class="btn primary">設定を保存</button>
+        <button id="hideSetupBtn" class="btn ghost">閉じる</button>
+      </div>
+    </section>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="dashboard">ホーム</button>
+      <button class="tab" data-tab="sales">売上</button>
+      <button class="tab" data-tab="patients">患者</button>
+      <button class="tab" data-tab="history">通院履歴</button>
+      <button class="tab" data-tab="tickets">回数券</button>
+      <button class="tab" data-tab="reservations">予約メモ</button>
+      <button class="tab" data-tab="receipts">レシート</button>
+      <button class="tab" data-tab="intake">問診</button>
+      <button class="tab" data-tab="summary">集計</button>
+      <button class="tab" data-tab="calendar">予約カレンダー</button>
+      <button class="tab" data-tab="chartPanel">統計グラフ</button>
+      <button class="tab" data-tab="chartImages">カルテ画像</button>
+      <button class="tab" data-tab="lineNotify">LINE通知</button>
+      <button class="tab" data-tab="masters">設定</button>
+    </nav>
+
+    <main>
+      <section id="dashboard" class="panel active">
+        <div class="section-head"><div><h2>ホーム</h2><p>今日の入力・患者情報・回数券・売上を一元管理します。</p></div><button id="installBtn" class="btn primary hidden">ホーム画面に追加</button></div>
+        <div class="kpi-grid">
+          <div class="kpi"><span>本日売上</span><strong id="todaySales">¥0</strong></div>
+          <div class="kpi"><span>今月売上</span><strong id="monthSales">¥0</strong></div>
+          <div class="kpi"><span>患者数</span><strong id="patientCount">0</strong></div>
+          <div class="kpi"><span>回数券残あり</span><strong id="ticketActiveCount">0</strong></div>
+        </div>
+        <div class="two-col">
+          <div class="card"><h3>本日の予約メモ</h3><div id="todayReservations" class="list"></div></div>
+          <div class="card"><h3>直近の通院履歴</h3><div id="recentVisits" class="list"></div></div>
+        </div>
+      </section>
+
+      <section id="sales" class="panel">
+        <div class="section-head"><div><h2>売上入力</h2><p>患者No.と施術メニューを選ぶと、氏名・料金が自動入力されます。</p></div></div>
+        <form id="saleForm" class="card form-grid">
+          <input type="hidden" id="saleId">
+          <label>日付<input id="saleDate" type="date" required></label>
+          <label>患者No.<input id="salePatientNo" list="patientNoList" inputmode="numeric" placeholder="例：1"></label>
+          <datalist id="patientNoList"></datalist>
+          <label>患者氏名<input id="salePatientName" readonly></label>
+          <label>施術メニュー<select id="saleMenu" required></select></label>
+          <label>売上区分<select id="saleType"><option>現金</option><option>カード</option><option>オンライン</option><option>回数券使用</option><option>回数券販売</option><option>混合</option></select></label>
+          <label>会計金額<input id="saleAmount" type="number" min="0" step="1"></label>
+          <label>現金預かり<input id="cashReceived" type="number" min="0" step="1"></label>
+          <label>お釣り<input id="changeDue" readonly></label>
+          <label>カード支払い<input id="cardAmount" type="number" min="0" step="1"></label>
+          <label>オンライン決済<input id="onlineAmount" type="number" min="0" step="1"></label>
+          <label>回数券販売<input id="ticketSaleAmount" type="number" min="0" step="1"></label>
+          <label>回数券使用数<input id="ticketUsed" type="number" min="0" step="1" value="0"></label>
+          <label class="wide">備考<input id="saleNote" placeholder="例：割引、次回予約、確認事項"></label>
+          <div class="form-actions"><button class="btn primary" type="submit">保存</button><button class="btn ghost" type="button" id="clearSaleBtn">クリア</button></div>
+        </form>
+        <div class="table-card"><div class="table-head"><h3>売上一覧</h3><button id="salesCsvBtn" class="btn ghost">CSV出力</button></div><div class="table-wrap"><table id="salesTable"><thead><tr><th>日付</th><th>No.</th><th>氏名</th><th>メニュー</th><th>区分</th><th>会計</th><th>預かり</th><th>釣銭</th><th>カード</th><th>オンライン</th><th>回数券</th><th>備考</th><th></th></tr></thead><tbody></tbody></table></div></div>
+      </section>
+
+      <section id="patients" class="panel">
+        <div class="section-head"><div><h2>患者登録</h2><p>患者No.は数字だけで登録できます。</p></div></div>
+        <form id="patientForm" class="card form-grid">
+          <label>患者No.<input id="patientNo" inputmode="numeric" required placeholder="1"></label>
+          <label>患者氏名<input id="patientName" required placeholder="山田 太郎"></label>
+          <label>フリガナ<input id="patientKana" placeholder="ヤマダ タロウ"></label>
+          <label>電話番号<input id="patientPhone" placeholder="任意"></label>
+          <label>初回来院日<input id="firstVisit" type="date"></label>
+          <label class="wide">メモ<input id="patientNote" placeholder="任意"></label>
+          <div class="form-actions"><button class="btn primary" type="submit">患者を保存</button><button class="btn ghost" type="button" id="clearPatientBtn">クリア</button></div>
+        </form>
+        <div class="table-card"><div class="table-head"><h3>患者一覧</h3><input id="patientSearch" class="search" placeholder="患者No.・氏名で検索"></div><div class="table-wrap"><table id="patientsTable"><thead><tr><th>No.</th><th>氏名</th><th>フリガナ</th><th>電話</th><th>初回</th><th>メモ</th><th></th></tr></thead><tbody></tbody></table></div></div>
+      </section>
+
+      <section id="history" class="panel">
+        <div class="section-head"><div><h2>患者ごとの通院履歴</h2><p>患者No.を選択すると、売上・施術・症状記録・回数券使用履歴を確認できます。</p></div></div>
+        <div class="card"><label>患者No. / 氏名<select id="historyPatientSelect"></select></label></div>
+        <div class="two-col">
+          <div class="card"><h3>通院サマリー</h3><div id="historySummary" class="detail-box"></div></div>
+          <form id="visitNoteForm" class="card form-grid single">
+            <h3>症状・施術記録</h3>
+            <input type="hidden" id="visitNoteId">
+            <label>日付<input id="visitDate" type="date"></label>
+            <label>主訴<input id="visitChiefComplaint" placeholder="例：めまい、頭痛、不眠"></label>
+            <label>施術メモ<textarea id="visitTreatmentNote" placeholder="施術内容・反応・次回方針"></textarea></label>
+            <label>次回メモ<textarea id="visitNextNote" placeholder="次回来院時に確認すること"></textarea></label>
+            <div class="form-actions"><button class="btn primary" type="submit">記録を保存</button></div>
+          </form>
+        </div>
+        <div class="table-card"><h3>履歴一覧</h3><div class="table-wrap"><table id="historyTable"><thead><tr><th>日付</th><th>種別</th><th>内容</th><th>金額</th><th>備考</th><th></th></tr></thead><tbody></tbody></table></div></div>
+      </section>
+
+      <section id="tickets" class="panel">
+        <div class="section-head"><div><h2>回数券管理</h2><p>売上入力から購入回数・使用回数・残数を自動集計します。</p></div></div>
+        <div class="table-card"><div class="table-wrap"><table id="ticketsTable"><thead><tr><th>No.</th><th>氏名</th><th>購入回数</th><th>使用済</th><th>残数</th><th>販売金額</th></tr></thead><tbody></tbody></table></div></div>
+      </section>
+
+      <section id="reservations" class="panel">
+        <div class="section-head"><div><h2>予約メモ</h2><p>予約・LINE連絡・来院前確認などを残せます。</p></div></div>
+        <form id="reservationForm" class="card form-grid">
+          <label>日付<input id="reservationDate" type="date"></label>
+          <label>時間<input id="reservationTime" type="time"></label>
+          <label>患者No.<input id="reservationPatientNo" list="patientNoList2" inputmode="numeric"></label>
+          <datalist id="patientNoList2"></datalist>
+          <label>内容<select id="reservationType"><option>予約</option><option>LINE連絡</option><option>キャンセル</option><option>変更</option><option>確認</option></select></label>
+          <label class="wide">メモ<input id="reservationNote"></label>
+          <div class="form-actions"><button class="btn primary" type="submit">予約メモを保存</button></div>
+        </form>
+        <div class="table-card"><div class="table-wrap"><table id="reservationsTable"><thead><tr><th>日付</th><th>時間</th><th>No.</th><th>氏名</th><th>内容</th><th>メモ</th><th></th></tr></thead><tbody></tbody></table></div></div>
+      </section>
+
+      <section id="receipts" class="panel">
+        <div class="section-head"><div><h2>レシート保存</h2><p>経費・備品購入などの画像を端末内に保存できます。</p></div></div>
+        <form id="receiptForm" class="card form-grid">
+          <label>日付<input id="receiptDate" type="date"></label>
+          <label>分類<input id="receiptCategory" placeholder="消耗品・備品・交通費など"></label>
+          <label>金額<input id="receiptAmount" type="number" min="0" step="1"></label>
+          <label>画像<input id="receiptImage" type="file" accept="image/*" capture="environment"></label>
+          <label class="wide">メモ<input id="receiptNote"></label>
+          <div class="form-actions"><button class="btn primary" type="submit">レシートを保存</button></div>
+        </form>
+        <div id="receiptGallery" class="gallery"></div>
+      </section>
+
+      <section id="intake" class="panel">
+        <div class="section-head"><div><h2>問診メモ</h2><p>簡易問診・生活習慣・症状メモを患者No.に紐づけます。</p></div></div>
+        <form id="intakeForm" class="card form-grid">
+          <label>日付<input id="intakeDate" type="date"></label>
+          <label>患者No.<input id="intakePatientNo" list="patientNoList3" inputmode="numeric"></label>
+          <datalist id="patientNoList3"></datalist>
+          <label>症状カテゴリ<select id="intakeCategory"><option>めまい</option><option>頭痛</option><option>不眠</option><option>自律神経</option><option>アトピー</option><option>腰痛</option><option>その他</option></select></label>
+          <label>強さ 1〜10<input id="intakeScore" type="number" min="1" max="10"></label>
+          <label class="wide">内容<textarea id="intakeText" placeholder="症状・生活習慣・経過など"></textarea></label>
+          <div class="form-actions"><button class="btn primary" type="submit">問診メモを保存</button></div>
+        </form>
+        <div class="table-card"><div class="table-wrap"><table id="intakeTable"><thead><tr><th>日付</th><th>No.</th><th>氏名</th><th>カテゴリ</th><th>強さ</th><th>内容</th><th></th></tr></thead><tbody></tbody></table></div></div>
+      </section>
+
+      <section id="summary" class="panel">
+        <div class="section-head"><div><h2>集計・分析</h2><p>日別・freee用CSVを出力できます。</p></div><div class="row-actions"><button id="dailyCsvBtn" class="btn ghost">日別CSV</button><button id="freeeCsvBtn" class="btn ghost">freee用CSV</button></div></div>
+        <div class="kpi-grid">
+          <div class="kpi"><span>総売上</span><strong id="sumTotal">¥0</strong></div>
+          <div class="kpi"><span>現金</span><strong id="sumCash">¥0</strong></div>
+          <div class="kpi"><span>カード</span><strong id="sumCard">¥0</strong></div>
+          <div class="kpi"><span>オンライン</span><strong id="sumOnline">¥0</strong></div>
+        </div>
+        <div class="table-card"><h3>日別集計</h3><div class="table-wrap"><table id="dailyTable"><thead><tr><th>日付</th><th>総売上</th><th>現金</th><th>カード</th><th>オンライン</th><th>回数券販売</th><th>回数券使用</th></tr></thead><tbody></tbody></table></div></div>
+      </section>
+
+
+      <section id="calendar" class="panel">
+        <div class="section-head">
+          <div>
+            <h2>予約カレンダー</h2>
+            <p>予約メモを月間カレンダー形式で確認できます。</p>
+          </div>
+          <div class="row-actions">
+            <button id="calPrevBtn" class="btn ghost" type="button">前月</button>
+            <strong id="calendarTitle" class="calendar-title">----</strong>
+            <button id="calNextBtn" class="btn ghost" type="button">翌月</button>
+          </div>
+        </div>
+        <div id="calendarGrid" class="calendar-grid"></div>
+      </section>
+
+      <section id="chartPanel" class="panel">
+        <div class="section-head">
+          <div>
+            <h2>統計グラフ</h2>
+            <p>売上・来院数を月別に可視化します。</p>
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="card">
+            <h3>月別売上</h3>
+            <canvas id="monthlySalesCanvas" width="720" height="360"></canvas>
+          </div>
+          <div class="card">
+            <h3>月別来院数</h3>
+            <canvas id="monthlyVisitsCanvas" width="720" height="360"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <section id="chartImages" class="panel">
+        <div class="section-head">
+          <div>
+            <h2>カルテ画像保存</h2>
+            <p>患者No.に画像を紐づけて保存できます。症状写真・姿勢写真・メモ画像などに使えます。</p>
+          </div>
+        </div>
+        <form id="chartImageForm" class="card form-grid">
+          <label>日付<input id="chartImageDate" type="date"></label>
+          <label>患者No.<input id="chartImagePatientNo" list="patientNoList4" inputmode="numeric"></label>
+          <datalist id="patientNoList4"></datalist>
+          <label>分類<input id="chartImageCategory" placeholder="姿勢・皮膚・メモ・その他"></label>
+          <label>画像<input id="chartImageFile" type="file" accept="image/*" capture="environment"></label>
+          <label class="wide">メモ<input id="chartImageNote" placeholder="画像に関する補足"></label>
+          <div class="form-actions">
+            <button class="btn primary" type="submit">カルテ画像を保存</button>
+          </div>
+        </form>
+        <div id="chartImageGallery" class="gallery"></div>
+      </section>
+
+      <section id="lineNotify" class="panel">
+        <div class="section-head">
+          <div>
+            <h2>LINE通知</h2>
+            <p>Apps Script側にLINE送信用設定を入れると、予約メモなどをLINEへ送信できます。</p>
+          </div>
+        </div>
+        <form id="lineNotifyForm" class="card form-grid">
+          <label>通知タイトル<input id="lineTitle" placeholder="gene通知"></label>
+          <label class="wide">通知本文<textarea id="lineMessage" placeholder="通知したい内容"></textarea></label>
+          <div class="form-actions">
+            <button class="btn primary" type="submit">LINE通知を送信</button>
+          </div>
+        </form>
+        <div class="card">
+          <h3>注意</h3>
+          <p class="muted">LINE公式アカウントのMessaging APIを使う場合、チャネルアクセストークンと送信先IDをApps Scriptに設定します。ブラウザ側にはトークンを保存しません。</p>
+        </div>
+      </section>
+
+      <section id="masters" class="panel">
+        <div class="section-head"><div><h2>料金マスタ・アプリ設定</h2><p>施術メニュー、回数券、同期設定を管理します。</p></div></div>
+        <form id="menuForm" class="card form-grid">
+          <label>メニュー名<input id="menuName" required placeholder="通常施術"></label>
+          <label>料金<input id="menuPrice" type="number" min="0" step="1" required placeholder="5500"></label>
+          <label>回数券回数<input id="menuTicketCount" type="number" min="0" step="1" placeholder="回数券以外は0"></label>
+          <div class="form-actions"><button class="btn primary" type="submit">メニュー保存</button></div>
+        </form>
+        <div class="table-card"><div class="table-wrap"><table id="menusTable"><thead><tr><th>メニュー</th><th>料金</th><th>回数券回数</th><th></th></tr></thead><tbody></tbody></table></div></div>
+      
+        <div class="card">
+          <h3>freee連携設定</h3>
+          <p class="muted">現時点ではfreee取込用CSVを安全に自動生成します。freee APIへの完全自動送信はOAuth認証が必要なため、別途freeeアプリ登録が必要です。</p>
+          <button id="freeeAutoCsvBtn" class="btn primary" type="button">freee用CSVを自動作成</button>
+        </div>
+      </section>
+    </main>
+  </div>
+<script src="assets/app.js"></script>
+</body>
+</html>
