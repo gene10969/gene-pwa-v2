@@ -1,5 +1,5 @@
 {
-  "name": "gene 管理アプリ",
+  "name": "gene",
   "short_name": "gene",
   "start_url": "./index.html",
   "display": "standalone",
